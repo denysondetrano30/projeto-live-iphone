@@ -1,3 +1,4 @@
+import AudioToolbox
 import SwiftUI
 import UIKit
 
@@ -5,6 +6,7 @@ struct ContentView: View {
     @StateObject private var camera = CameraController()
     @StateObject private var link = PCLink()
     @StateObject private var usb = USBLink()
+    @StateObject private var inbox = DirectorInbox()
     @State private var showGrid = true
     @State private var isScanning = false
     @State private var scanHint: String?
@@ -63,12 +65,27 @@ struct ContentView: View {
                 }
                 .padding(12)
             }
+
+            // Aviso do diretor por cima de tudo, até o operador tocar em "Entendi".
+            if let command = inbox.current, !isScanning {
+                directorMessage(command)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
         }
         .animation(.easeInOut(duration: 0.15), value: isOnAir)
+        .animation(.easeOut(duration: 0.2), value: inbox.current?.id)
+        .onChange(of: inbox.current?.id) { newValue in
+            // Vibra só fora do ar: no ar, a vibração poderia tremer a imagem que está saindo na live.
+            if newValue != nil && !isOnAir {
+                AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
+            }
+        }
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
         .onAppear {
             UIApplication.shared.isIdleTimerDisabled = true
+            link.inbox = inbox
+            usb.inbox = inbox
             let wifi = link
             let cable = usb
             camera.attach { buffer in
@@ -77,7 +94,7 @@ struct ContentView: View {
             }
             camera.start()
             link.start()
-            usb.start()
+            usb.start(cameraName: link.cameraName)
         }
     }
 
@@ -165,6 +182,46 @@ struct ContentView: View {
                     .padding(.horizontal, 6)
             }
             .buttonStyle(RoundButtonStyle(active: link.pairing == nil))
+        }
+    }
+
+    // MARK: - Aviso do diretor
+
+    /// Fica no alto da tela, para o operador continuar vendo o enquadramento enquanto obedece.
+    private func directorMessage(_ command: DirectorCommand) -> some View {
+        VStack {
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("DIRETOR")
+                        .font(.caption.weight(.heavy))
+                        .opacity(0.6)
+                    Text(command.text)
+                        .font(.system(size: 40, weight: .heavy))
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.5)
+                }
+                Spacer(minLength: 8)
+                Button {
+                    inbox.acknowledge()
+                } label: {
+                    Text("Entendi")
+                        .font(.title3.bold())
+                        .foregroundColor(.white)
+                        .frame(minWidth: 130, minHeight: 50)
+                        .background(Color.black)
+                        .clipShape(Capsule())
+                }
+            }
+            .foregroundColor(.black)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .frame(maxWidth: 640)
+            .background(Color.yellow)
+            .cornerRadius(16)
+            .shadow(radius: 10)
+            .padding(.top, 58)
+            .padding(.horizontal, 24)
+            Spacer()
         }
     }
 

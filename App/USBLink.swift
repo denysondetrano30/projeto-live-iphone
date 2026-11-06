@@ -13,8 +13,13 @@ import VideoToolbox
 ///
 /// No sentido contrário, pela mesma conexão, o OBS avisa se esta câmera está no ar
 /// (linhas `TALLY on` e `TALLY off`).
+///
+/// Além disso o app escuta na porta 9011 (controle): por ela chegam o "no ar" e os avisos do
+/// diretor (`CMD <número> <texto>`), e o app responde `ACK <número>` quando o operador toca em
+/// "Entendi". Ao conectar, o app se apresenta com `HELLO usb <nome da câmera>`.
 final class USBLink: ObservableObject {
     static let port: UInt16 = 9010
+    static let controlPort: UInt16 = 9011
 
     /// true enquanto o PC estiver recebendo a imagem pelo cabo.
     @Published private(set) var isConnected = false
@@ -28,12 +33,20 @@ final class USBLink: ObservableObject {
     private let muxer = TSMuxer()
     private var pendingBytes = 0
     private var commands = LineReader()
+    private var controlListener: NWListener?
+    private var controlConnection: NWConnection?
+    private var controlLines = LineReader()
+    private var cameraName = "iPhone"
     private let lock = NSLock()
+    /// Onde os avisos do diretor que chegam pelo cabo são mostrados.
+    weak var inbox: DirectorInbox?
     private var sending = false
 
-    func start() {
+    func start(cameraName: String) {
         queue.async { [weak self] in
+            self?.cameraName = cameraName
             self?.startListener()
+            self?.startControlListener()
         }
     }
 
@@ -62,6 +75,88 @@ final class USBLink: ObservableObject {
         } catch {
             restartLater()
         }
+    }
+
+    private func startControlListener() {
+        guard controlListener == nil, let port = NWEndpoint.Port(rawValue: Self.controlPort) else { return }
+        do {
+            let listener = try NWListener(using: .tcp, on: port)
+            listener.newConnectionHandler = { [weak self] connection in
+                self?.acceptControl(connection)
+            }
+            listener.stateUpdateHandler = { [weak self] state in
+                if case .failed = state {
+                    self?.restartControlLater()
+                }
+            }
+            listener.start(queue: queue)
+            controlListener = listener
+        } catch {
+            restartControlLater()
+        }
+    }
+
+    private func restartControlLater() {
+        controlListener?.cancel()
+        controlListener = nil
+        queue.asyncAfter(deadline: .now() + 3) { [weak self] in
+            self?.startControlListener()
+        }
+    }
+
+    private func acceptControl(_ newConnection: NWConnection) {
+        controlConnection?.cancel()
+        controlConnection = newConnection
+        controlLines = LineReader()
+        newConnection.stateUpdateHandler = { [weak self, weak newConnection] state in
+            guard let self, let newConnection, self.controlConnection === newConnection else { return }
+            switch state {
+            case .ready:
+                self.sendControl("HELLO usb \(self.cameraName)")
+                self.receiveControl(on: newConnection)
+            case .failed, .cancelled:
+                self.controlConnection = nil
+            default:
+                break
+            }
+        }
+        newConnection.start(queue: queue)
+    }
+
+    private func receiveControl(on connection: NWConnection) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) { [weak self] data, _, isComplete, error in
+            guard let self, self.controlConnection === connection else { return }
+            if let data, !data.isEmpty {
+                for line in self.controlLines.feed(data) {
+                    self.handleControl(line)
+                }
+            }
+            if isComplete || error != nil {
+                connection.cancel()
+                return
+            }
+            self.receiveControl(on: connection)
+        }
+    }
+
+    private func handleControl(_ line: String) {
+        if line == "TALLY on" {
+            notifyTally(true)
+        } else if line == "TALLY off" {
+            notifyTally(false)
+        } else if let command = DirectorInbox.parse(line) {
+            let number = command.number
+            inbox?.receive(number: number, text: command.text) { [weak self] in
+                self?.queue.async {
+                    self?.sendControl("ACK \(number)")
+                }
+            }
+        }
+        // "PING": nada a fazer.
+    }
+
+    private func sendControl(_ text: String) {
+        controlConnection?.send(content: Data((text + "\n").utf8), completion: .contentProcessed { _ in })
     }
 
     private func restartLater() {

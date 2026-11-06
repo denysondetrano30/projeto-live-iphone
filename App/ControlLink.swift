@@ -9,6 +9,7 @@ import Network
 /// - OBS → app: `PL1 <desafio>`
 /// - app → OBS: `HELLO <HMAC-SHA256(senha do QR code, desafio) em hex> <nome da câmera>`
 /// - OBS → app: `OK`, depois `TALLY on` (no ar) ou `TALLY off` sempre que mudar
+/// - OBS → app: `CMD <número> <texto>` (aviso do diretor); app → OBS: `ACK <número>` no "Entendi"
 /// - os dois lados: `PING` a cada 2 segundos; 6 segundos sem nada = caiu, e o app reconecta
 ///
 /// Assim a senha nunca passa pela rede. Pelo cabo USB, as linhas `TALLY` chegam pelo próprio
@@ -16,6 +17,8 @@ import Network
 final class ControlLink {
     /// Chamado (na fila do canal) quando a câmera entra (true) ou sai (false) do ar.
     var onTally: ((Bool) -> Void)?
+    /// Chamado (na fila do canal) com cada aviso do diretor.
+    var onCommand: ((UInt32, String) -> Void)?
 
     private struct Target: Equatable {
         let host: String
@@ -49,6 +52,14 @@ final class ControlLink {
             self.target = newTarget
             self.connect()
             self.startTimer()
+        }
+    }
+
+    /// O operador tocou em "Entendi" no aviso `number`.
+    func acknowledge(_ number: UInt32) {
+        queue.async { [weak self] in
+            guard let self, self.authenticated else { return }
+            self.send("ACK \(number)")
         }
     }
 
@@ -150,6 +161,8 @@ final class ControlLink {
             setTally(true)
         } else if line == "TALLY off" {
             setTally(false)
+        } else if let command = DirectorInbox.parse(line) {
+            onCommand?(command.number, command.text)
         } else if line.hasPrefix("ERR") {
             // Senha recusada (o OBS gerou um QR code novo). O vídeo também vai parar de conectar.
             lost()

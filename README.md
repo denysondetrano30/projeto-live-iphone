@@ -4,8 +4,13 @@ App que transforma um iPhone (mesmo antigo) em câmera para a transmissão do cu
 Faz parte do projeto [projeto-live](https://github.com/denysondetrano30/projeto-live),
 uma versão do OBS Studio feita para igrejas.
 
-## O que a versão 0.6 faz
+## O que a versão 0.7 faz
 
+- **Avisos do diretor.** No OBS, o painel "Diretor (Projeto Live)" (menu Painéis) e os atalhos de
+  teclado mandam avisos para cada câmera: "Abre", "Fecha", "Foca no pregador", "Você está no ar"
+  ou um texto livre. O aviso aparece grande na tela do iPhone, que vibra se a câmera não estiver no
+  ar (no ar, a vibração tremeria a imagem). O operador toca em **Entendi** e o diretor vê a
+  confirmação no painel. Pelo cabo, os avisos usam a porta 9011.
 - **Aviso de "no ar".** Quando a fonte "Celular" desta câmera entra no Programa do OBS, a tela do
   iPhone ganha uma borda vermelha e o selo **NO AR**. Pelo Wi-Fi, o aviso vem por um canal de
   controle (TCP, na mesma porta do vídeo, com prova da senha do QR code por HMAC-SHA256, sem mandar

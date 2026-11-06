@@ -25,7 +25,7 @@ final class PCLink: ObservableObject {
     }
 
     static let port = 9000
-    static let appVersion = "0.6"
+    static let appVersion = "0.7"
 
     @Published private(set) var state: State = .starting
     @Published private(set) var pairing: Pairing?
@@ -52,6 +52,8 @@ final class PCLink: ObservableObject {
     private var generation = 0
     private var loopTask: Task<Void, Never>?
     private let control = ControlLink()
+    /// Onde os avisos do diretor que chegam pelo Wi-Fi são mostrados.
+    weak var inbox: DirectorInbox?
 
     init() {
         let saved = PairingStore.load()
@@ -60,6 +62,12 @@ final class PCLink: ObservableObject {
         control.onTally = { [weak self] value in
             DispatchQueue.main.async {
                 self?.onAir = value
+            }
+        }
+        control.onCommand = { [weak self] number, text in
+            guard let self else { return }
+            self.inbox?.receive(number: number, text: text) { [weak self] in
+                self?.control.acknowledge(number)
             }
         }
     }
