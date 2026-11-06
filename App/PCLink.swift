@@ -11,6 +11,9 @@ import VideoToolbox
 ///
 /// Sem pareamento (plano B): o iPhone fica esperando na porta 9000, e o OBS liga para ele
 /// pelo endereço `srt://IP-DO-IPHONE:9000`.
+///
+/// Pareado, junto com o vídeo abre também o canal de controle (`ControlLink`), por onde o OBS
+/// avisa se esta câmera está no ar.
 final class PCLink: ObservableObject {
     enum State: Equatable {
         case starting
@@ -22,10 +25,12 @@ final class PCLink: ObservableObject {
     }
 
     static let port = 9000
-    static let appVersion = "0.5"
+    static let appVersion = "0.6"
 
     @Published private(set) var state: State = .starting
     @Published private(set) var pairing: Pairing?
+    /// true enquanto o OBS estiver mostrando esta câmera no Programa (pelo Wi-Fi).
+    @Published private(set) var onAir = false
 
     /// Nome fixo desta câmera, por exemplo "Câmera iPhone 4F2A". É sorteado na primeira vez.
     let cameraName: String = PCLink.makeCameraName()
@@ -46,11 +51,17 @@ final class PCLink: ObservableObject {
     private var pairingForLoop: Pairing?
     private var generation = 0
     private var loopTask: Task<Void, Never>?
+    private let control = ControlLink()
 
     init() {
         let saved = PairingStore.load()
         pairing = saved
         pairingForLoop = saved
+        control.onTally = { [weak self] value in
+            DispatchQueue.main.async {
+                self?.onAir = value
+            }
+        }
     }
 
     func start() {
@@ -109,7 +120,8 @@ final class PCLink: ObservableObject {
             if pairingChanged(since: startGeneration) { return }
             let url = "srt://\(host):\(pairing.port)?mode=caller&passphrase=\(pairing.key)&pbkeylen=16"
             let status = "Enviando para \"\(pairing.sourceName)\" no OBS"
-            let connected = await stream(to: url, status: status, generation: startGeneration)
+            let control = (host: host, port: pairing.port, key: pairing.key)
+            let connected = await stream(to: url, status: status, generation: startGeneration, control: control)
             if connected {
                 return
             }
@@ -123,14 +135,25 @@ final class PCLink: ObservableObject {
         let address = "\(phoneIP):\(Self.port)"
         publish(.waiting(address: address))
         let url = "srt://0.0.0.0:\(Self.port)?mode=listener"
-        let connected = await stream(to: url, status: "Enviando para o PC · srt://\(address)", generation: nil)
+        let connected = await stream(
+            to: url,
+            status: "Enviando para o PC · srt://\(address)",
+            generation: nil,
+            control: nil
+        )
         if !connected {
             try? await Task.sleep(nanoseconds: 1_000_000_000)
         }
     }
 
     /// Conecta, manda a imagem enquanto a conexão durar e devolve true se chegou a conectar.
-    private func stream(to url: String, status: String, generation startGeneration: Int?) async -> Bool {
+    /// Com `control`, abre também o canal de controle no mesmo endereço (aviso de "no ar").
+    private func stream(
+        to url: String,
+        status: String,
+        generation startGeneration: Int?,
+        control target: (host: String, port: Int, key: String)?
+    ) async -> Bool {
         let connection = SRTConnection()
         let stream = SRTStream(connection: connection)
         do {
@@ -158,6 +181,9 @@ final class PCLink: ObservableObject {
         await stream.publish()
         locked { activeStream = stream }
         publish(.sending(status))
+        if let target {
+            control.start(host: target.host, port: target.port, key: target.key, cameraName: cameraName)
+        }
 
         while !Task.isCancelled {
             if let startGeneration, pairingChanged(since: startGeneration) { break }
@@ -167,6 +193,7 @@ final class PCLink: ObservableObject {
         }
 
         locked { activeStream = nil }
+        control.stop()
         await connection.close()
         return true
     }

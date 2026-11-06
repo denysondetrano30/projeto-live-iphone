@@ -10,11 +10,16 @@ import VideoToolbox
 /// que só leva conexões TCP do PC para o iPhone. Então o app escuta na porta 9010; quando a fonte
 /// "Celular" do OBS (modo Cabo USB) conecta, o app comprime o vídeo em H.264 e manda em MPEG-TS,
 /// o mesmo formato que vai pelo Wi-Fi.
+///
+/// No sentido contrário, pela mesma conexão, o OBS avisa se esta câmera está no ar
+/// (linhas `TALLY on` e `TALLY off`).
 final class USBLink: ObservableObject {
     static let port: UInt16 = 9010
 
     /// true enquanto o PC estiver recebendo a imagem pelo cabo.
     @Published private(set) var isConnected = false
+    /// true enquanto o OBS estiver mostrando esta câmera no Programa (pelo cabo).
+    @Published private(set) var onAir = false
 
     private let queue = DispatchQueue(label: "projetolive.usb")
     private var listener: NWListener?
@@ -22,6 +27,7 @@ final class USBLink: ObservableObject {
     private let encoder = H264Encoder()
     private let muxer = TSMuxer()
     private var pendingBytes = 0
+    private var commands = LineReader()
     private let lock = NSLock()
     private var sending = false
 
@@ -71,6 +77,7 @@ final class USBLink: ObservableObject {
         connection?.cancel()
         connection = newConnection
         pendingBytes = 0
+        commands = LineReader()
 
         newConnection.stateUpdateHandler = { [weak self, weak newConnection] state in
             guard let self, let newConnection else { return }
@@ -82,6 +89,7 @@ final class USBLink: ObservableObject {
                 }
                 self.setSending(true)
                 self.notify(true)
+                self.receiveCommands(on: newConnection)
             case .failed, .cancelled:
                 if self.connection === newConnection {
                     self.stopSending()
@@ -98,6 +106,28 @@ final class USBLink: ObservableObject {
         encoder.stop()
         connection = nil
         notify(false)
+        notifyTally(false)
+    }
+
+    /// Lê os avisos que o OBS manda pelo cabo (uma linha de texto por aviso).
+    private func receiveCommands(on connection: NWConnection) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) { [weak self] data, _, isComplete, error in
+            guard let self, self.connection === connection else { return }
+            if let data, !data.isEmpty {
+                for line in self.commands.feed(data) {
+                    if line == "TALLY on" {
+                        self.notifyTally(true)
+                    } else if line == "TALLY off" {
+                        self.notifyTally(false)
+                    }
+                }
+            }
+            if isComplete || error != nil {
+                connection.cancel()
+                return
+            }
+            self.receiveCommands(on: connection)
+        }
     }
 
     /// Chamado pelo codificador (fila dele) com cada quadro comprimido.
@@ -139,6 +169,14 @@ final class USBLink: ObservableObject {
     private func notify(_ connected: Bool) {
         DispatchQueue.main.async { [weak self] in
             self?.isConnected = connected
+        }
+    }
+
+    private func notifyTally(_ value: Bool) {
+        DispatchQueue.main.async { [weak self] in
+            if self?.onAir != value {
+                self?.onAir = value
+            }
         }
     }
 }

@@ -33,6 +33,15 @@ struct ContentView: View {
             }
             .ignoresSafeArea()
 
+            // No ar: borda vermelha em volta da tela inteira.
+            if isOnAir {
+                Rectangle()
+                    .strokeBorder(Color.red, lineWidth: 12)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
+
             statusMessage
 
             if isScanning {
@@ -55,6 +64,7 @@ struct ContentView: View {
                 .padding(12)
             }
         }
+        .animation(.easeInOut(duration: 0.15), value: isOnAir)
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
         .onAppear {
@@ -73,11 +83,26 @@ struct ContentView: View {
 
     // MARK: - Partes da tela
 
+    /// O OBS avisou que esta câmera está no Programa (pelo Wi-Fi ou pelo cabo).
+    private var isOnAir: Bool {
+        link.onAir || usb.onAir
+    }
+
     private var topBar: some View {
         HStack(spacing: 8) {
-            Circle()
-                .fill(linkColor)
-                .frame(width: 10, height: 10)
+            if isOnAir {
+                Text("NO AR")
+                    .font(.caption.weight(.heavy))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color.red)
+                    .cornerRadius(4)
+            } else {
+                Circle()
+                    .fill(linkColor)
+                    .frame(width: 10, height: 10)
+            }
             Text("\(link.cameraName) · \(linkText)")
                 .font(.caption.bold())
                 .lineLimit(1)
