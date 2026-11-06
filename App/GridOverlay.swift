@@ -34,7 +34,8 @@ struct GridOverlay: View {
                         .padding(.vertical, 2)
                         .background(Color.black.opacity(0.6))
                         .cornerRadius(4)
-                        .position(x: video.midX, y: video.minY + 16)
+                        // Abaixo da barra de status do topo, para não ficar escondido.
+                        .position(x: video.midX, y: video.minY + 76)
                 }
 
                 ThirdsGrid()

@@ -3,6 +3,7 @@ import Combine
 import UIKit
 
 /// Cuida da câmera: pede permissão, liga a câmera traseira e aplica zoom, foco e exposição.
+/// Também entrega cada quadro de vídeo para quem for mandar ao PC (o `PCLink`).
 /// Toda mexida na câmera acontece numa fila própria, para a tela não travar.
 final class CameraController: NSObject, ObservableObject {
     enum Status {
@@ -20,6 +21,10 @@ final class CameraController: NSObject, ObservableObject {
     let session = AVCaptureSession()
 
     private let sessionQueue = DispatchQueue(label: "projetolive.camera")
+    private let videoOutput = AVCaptureVideoDataOutput()
+    private let videoOutputQueue = DispatchQueue(label: "projetolive.video")
+    /// Lido e trocado só na `videoOutputQueue`.
+    private var frameSink: PCLink?
     private var device: AVCaptureDevice?
     private var maxZoomOnQueue: CGFloat = 1.0
     private var lockedOnQueue = false
@@ -29,6 +34,13 @@ final class CameraController: NSObject, ObservableObject {
     private let zoomLimit: CGFloat = 6.0
 
     // MARK: - Ligar a câmera
+
+    /// Liga a câmera ao envio para o PC. Cada quadro passa a ir também para o `link`.
+    func attach(_ link: PCLink) {
+        videoOutputQueue.async {
+            self.frameSink = link
+        }
+    }
 
     func start() {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
@@ -74,7 +86,11 @@ final class CameraController: NSObject, ObservableObject {
             session.sessionPreset = .hd1920x1080
         }
 
-        guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) else {
+        // Em aparelhos com lente de zoom (como o 8 Plus), a câmera dupla troca sozinha
+        // para essa lente a partir do 2x, e a imagem fica mais nítida.
+        let dualCamera = AVCaptureDevice.default(.builtInDualCamera, for: .video, position: .back)
+        let wideCamera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
+        guard let camera = dualCamera ?? wideCamera else {
             throw CameraError.noCamera
         }
         let input = try AVCaptureDeviceInput(device: camera)
@@ -83,6 +99,16 @@ final class CameraController: NSObject, ObservableObject {
         }
         session.addInput(input)
         device = camera
+
+        videoOutput.alwaysDiscardsLateVideoFrames = true
+        videoOutput.setSampleBufferDelegate(self, queue: videoOutputQueue)
+        guard session.canAddOutput(videoOutput) else {
+            throw CameraError.cannotUseCamera
+        }
+        session.addOutput(videoOutput)
+        if let connection = videoOutput.connection(with: .video), connection.isVideoOrientationSupported {
+            connection.videoOrientation = .landscapeRight
+        }
 
         try camera.lockForConfiguration()
         if camera.isFocusModeSupported(.continuousAutoFocus) {
@@ -106,6 +132,19 @@ final class CameraController: NSObject, ObservableObject {
     private func publishStatus(_ newStatus: Status) {
         DispatchQueue.main.async {
             self.status = newStatus
+        }
+    }
+
+    /// Gira os quadros enviados ao PC junto com o celular, para a imagem nunca chegar de cabeça para baixo.
+    func setVideoOrientation(_ orientation: AVCaptureVideoOrientation) {
+        sessionQueue.async { [weak self] in
+            guard let self,
+                  let connection = self.videoOutput.connection(with: .video),
+                  connection.isVideoOrientationSupported,
+                  connection.videoOrientation != orientation else {
+                return
+            }
+            connection.videoOrientation = orientation
         }
     }
 
@@ -214,6 +253,16 @@ final class CameraController: NSObject, ObservableObject {
                 // Ignorado: o usuário pode tocar de novo.
             }
         }
+    }
+}
+
+extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate {
+    func captureOutput(
+        _ output: AVCaptureOutput,
+        didOutput sampleBuffer: CMSampleBuffer,
+        from connection: AVCaptureConnection
+    ) {
+        frameSink?.send(sampleBuffer)
     }
 }
 

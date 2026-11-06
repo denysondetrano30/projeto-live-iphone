@@ -3,6 +3,7 @@ import UIKit
 
 struct ContentView: View {
     @StateObject private var camera = CameraController()
+    @StateObject private var link = PCLink()
     @State private var showGrid = true
 
     private let zoomSteps: [CGFloat] = [1, 2, 3]
@@ -17,7 +18,8 @@ struct ContentView: View {
                     CameraPreview(
                         session: camera.session,
                         onTap: { point in camera.focus(at: point) },
-                        onPinch: { scale, state in camera.pinch(scale: scale, state: state) }
+                        onPinch: { scale, state in camera.pinch(scale: scale, state: state) },
+                        onOrientation: { orientation in camera.setVideoOrientation(orientation) }
                     )
                     if showGrid {
                         GridOverlay(landscape: landscape)
@@ -40,20 +42,27 @@ struct ContentView: View {
         .persistentSystemOverlays(.hidden)
         .onAppear {
             UIApplication.shared.isIdleTimerDisabled = true
+            camera.attach(link)
             camera.start()
+            link.start()
         }
     }
 
     // MARK: - Partes da tela
 
     private var topBar: some View {
-        HStack {
-            Text("Projeto Live · câmera")
+        HStack(spacing: 8) {
+            Circle()
+                .fill(linkColor)
+                .frame(width: 10, height: 10)
+            Text(linkText)
                 .font(.caption.bold())
-            Text("envio para o PC: em breve")
-                .font(.caption)
-                .opacity(0.8)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
             Spacer()
+            Text("v0.2")
+                .font(.caption2)
+                .opacity(0.6)
             Text(String(format: "%.1fx", Double(camera.zoomFactor)))
                 .font(.caption.monospacedDigit().bold())
         }
@@ -98,6 +107,34 @@ struct ContentView: View {
                     .padding(.horizontal, 6)
             }
             .buttonStyle(RoundButtonStyle(active: camera.isLocked))
+        }
+    }
+
+    private var linkText: String {
+        switch link.state {
+        case .starting:
+            return "Preparando o envio para o PC…"
+        case .noWifi:
+            return "Sem Wi-Fi: conecte o iPhone na mesma rede do PC"
+        case .waiting(let address):
+            return "Esperando o OBS · no OBS, use srt://\(address)"
+        case .sending(let address):
+            return "Enviando para o PC · srt://\(address)"
+        case .failed(let message):
+            return message
+        }
+    }
+
+    private var linkColor: Color {
+        switch link.state {
+        case .sending:
+            return .green
+        case .waiting:
+            return .yellow
+        case .starting:
+            return .gray
+        case .noWifi, .failed:
+            return .red
         }
     }
 

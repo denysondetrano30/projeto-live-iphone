@@ -8,14 +8,24 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.1.0"
-    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "0.2.0"
+    CURRENT_PROJECT_VERSION: "2"
+packages:
+  # Biblioteca de transmissão (licença BSD-3). O SRT usa a libsrt (licença MPL 2.0).
+  HaishinKit:
+    url: https://github.com/HaishinKit/HaishinKit.swift
+    exactVersion: 2.3.0
 targets:
   ProjetoLive:
     type: application
     platform: iOS
     sources:
       - path: App
+    dependencies:
+      - package: HaishinKit
+        product: HaishinKit
+      - package: HaishinKit
+        product: SRTHaishinKit
     settings:
       base:
         PRODUCT_NAME: ProjetoLive
@@ -28,10 +38,11 @@ targets:
       properties:
         CFBundleDisplayName: Projeto Live
         NSCameraUsageDescription: O Projeto Live usa a câmera para mandar a imagem para o computador da transmissão.
+        NSLocalNetworkUsageDescription: O Projeto Live usa a rede local para mandar a imagem da câmera para o OBS no computador da transmissão.
         UILaunchScreen: {}
         UIRequiresFullScreen: true
+        # Só deitado: a transmissão é 16:9 e o vertical é recortado no PC.
         UISupportedInterfaceOrientations:
-          - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         UIApplicationSceneManifest:

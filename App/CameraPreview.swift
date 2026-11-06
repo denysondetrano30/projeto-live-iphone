@@ -7,18 +7,21 @@ struct CameraPreview: UIViewRepresentable {
     let session: AVCaptureSession
     var onTap: (CGPoint) -> Void
     var onPinch: (CGFloat, UIGestureRecognizer.State) -> Void
+    var onOrientation: (AVCaptureVideoOrientation) -> Void
 
     func makeUIView(context: Context) -> PreviewView {
         let view = PreviewView()
         view.previewLayer.session = session
         view.onTap = onTap
         view.onPinch = onPinch
+        view.onOrientation = onOrientation
         return view
     }
 
     func updateUIView(_ uiView: PreviewView, context: Context) {
         uiView.onTap = onTap
         uiView.onPinch = onPinch
+        uiView.onOrientation = onOrientation
         uiView.updateOrientation()
     }
 }
@@ -35,6 +38,7 @@ final class PreviewView: UIView {
 
     var onTap: ((CGPoint) -> Void)?
     var onPinch: ((CGFloat, UIGestureRecognizer.State) -> Void)?
+    var onOrientation: ((AVCaptureVideoOrientation) -> Void)?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -54,23 +58,28 @@ final class PreviewView: UIView {
         updateOrientation()
     }
 
-    /// Gira a imagem junto com a tela (em pé ou deitado).
+    /// Gira a imagem junto com a tela e avisa a câmera, para o vídeo enviado girar junto.
     func updateOrientation() {
-        guard let connection = previewLayer.connection,
-              connection.isVideoOrientationSupported,
-              let interfaceOrientation = window?.windowScene?.interfaceOrientation else {
+        guard let interfaceOrientation = window?.windowScene?.interfaceOrientation else {
             return
         }
+        let videoOrientation: AVCaptureVideoOrientation
         switch interfaceOrientation {
         case .landscapeLeft:
-            connection.videoOrientation = .landscapeLeft
+            videoOrientation = .landscapeLeft
         case .landscapeRight:
-            connection.videoOrientation = .landscapeRight
+            videoOrientation = .landscapeRight
         case .portraitUpsideDown:
-            connection.videoOrientation = .portraitUpsideDown
+            videoOrientation = .portraitUpsideDown
         default:
-            connection.videoOrientation = .portrait
+            videoOrientation = .portrait
         }
+        if let connection = previewLayer.connection,
+           connection.isVideoOrientationSupported,
+           connection.videoOrientation != videoOrientation {
+            connection.videoOrientation = videoOrientation
+        }
+        onOrientation?(videoOrientation)
     }
 
     @objc private func handleTap(_ gesture: UITapGestureRecognizer) {

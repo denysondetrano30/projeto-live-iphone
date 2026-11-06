@@ -4,18 +4,28 @@ App que transforma um iPhone (mesmo antigo) em câmera para a transmissão do cu
 Faz parte do projeto [projeto-live](https://github.com/denysondetrano30/projeto-live),
 uma versão do OBS Studio feita para igrejas.
 
-## O que a versão 0.1 faz
+## O que a versão 0.2 faz
 
-- Mostra a câmera traseira em tela cheia, em pé ou deitado.
-- Grade de terços e, com o celular deitado, o recorte vertical 9:16 do meio da imagem.
-- Zoom nos botões 1x, 2x e 3x, ou com pinça na tela.
-- Toque na tela para focar e medir a luz naquele ponto.
-- Botão "Travar", que segura foco, exposição e balanço de branco.
-- A tela não apaga enquanto o app está aberto.
-
-Ainda não envia a imagem para o PC. Isso vem na próxima versão.
+- Manda a imagem da câmera para o OBS do PC pelo Wi-Fi, em Full HD (1920x1080, 30 quadros, 6 Mbps),
+  usando o protocolo SRT. Ainda sem áudio.
+- Mostra no topo o endereço para colocar no OBS e se o PC está conectado (bolinha verde).
+- Usa a lente de zoom nos aparelhos que têm (como o iPhone 8 Plus): o 2x e o 3x ficam mais nítidos.
+- Funciona só com o celular deitado, porque a transmissão é 16:9. O vertical 9:16 é recortado no PC.
+- Grade de terços e recorte vertical 9:16, zoom 1x/2x/3x ou pinça, toque para focar,
+  botão "Travar" (foco, exposição e balanço de branco) e tela sempre acesa.
 
 Funciona a partir do iOS 16 (iPhone 8 e mais novos).
+
+## Como receber a imagem no OBS
+
+1. iPhone e PC na mesma rede Wi-Fi (ou o PC no cabo do mesmo roteador).
+2. Abra o app. No topo aparece algo como `srt://192.168.0.15:9000`.
+3. No OBS, adicione uma **Fonte de mídia**, desmarque **Arquivo local** e preencha:
+   - **Entrada:** o endereço que aparece no iPhone, por exemplo `srt://192.168.0.15:9000`
+   - **Formato de entrada:** `mpegts`
+4. A bolinha no iPhone fica verde e a imagem aparece no OBS.
+
+Se o OBS desconectar, o iPhone volta a esperar sozinho.
 
 ## Como o app é montado
 
@@ -24,7 +34,8 @@ num Mac na nuvem (veja `.github/workflows/montar-app.yml`) e guarda o arquivo
 `ProjetoLive.ipa` na página da compilação, em **Artifacts**.
 
 O projeto do Xcode é gerado na hora pelo [XcodeGen](https://github.com/yonaskolb/XcodeGen),
-a partir do arquivo `project.yml`.
+a partir do arquivo `project.yml`. O envio por SRT usa a biblioteca
+[HaishinKit](https://github.com/HaishinKit/HaishinKit.swift) 2.3.0 (licença BSD-3), que inclui a libsrt (licença MPL 2.0).
 
 ## Como instalar no iPhone pelo Windows
 
