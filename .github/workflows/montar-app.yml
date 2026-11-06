@@ -1,0 +1,52 @@
+name: Montar app iPhone
+run-name: Montar app iPhone (${{ github.sha }})
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  HOMEBREW_NO_AUTO_UPDATE: "1"
+jobs:
+  montar:
+    name: Montar o .ipa
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Instalar ferramentas
+        run: |
+          brew install xcodegen
+          command -v xcbeautify >/dev/null || brew install xcbeautify
+          xcodebuild -version
+
+      - name: Gerar o projeto do Xcode
+        run: xcodegen generate
+
+      - name: Compilar
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project ProjetoLive.xcodeproj \
+            -scheme ProjetoLive \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build | xcbeautify --renderer github-actions
+
+      - name: Empacotar o .ipa
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/ProjetoLive.app Payload/
+          zip -qry ProjetoLive.ipa Payload
+          ls -lh ProjetoLive.ipa
+
+      - name: Guardar o .ipa para download
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ProjetoLive-ipa-${{ github.run_number }}
+          path: ProjetoLive.ipa
+          retention-days: 30
