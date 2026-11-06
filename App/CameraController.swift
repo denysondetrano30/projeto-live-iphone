@@ -23,6 +23,9 @@ final class CameraController: NSObject, ObservableObject {
     private let sessionQueue = DispatchQueue(label: "projetolive.camera")
     private let videoOutput = AVCaptureVideoDataOutput()
     private let videoOutputQueue = DispatchQueue(label: "projetolive.video")
+    private let metadataOutput = AVCaptureMetadataOutput()
+    /// Chamado com o texto de cada QR code lido (só na fila principal, e só no modo Parear).
+    private var onCode: ((String) -> Void)?
     /// Lido e trocado só na `videoOutputQueue`.
     private var frameSink: PCLink?
     private var device: AVCaptureDevice?
@@ -110,6 +113,13 @@ final class CameraController: NSObject, ObservableObject {
             connection.videoOrientation = .landscapeRight
         }
 
+        // Leitor de QR code para o pareamento. Fica desligado até tocar em Parear.
+        if session.canAddOutput(metadataOutput) {
+            session.addOutput(metadataOutput)
+            metadataOutput.setMetadataObjectsDelegate(self, queue: .main)
+            metadataOutput.metadataObjectTypes = []
+        }
+
         try camera.lockForConfiguration()
         if camera.isFocusModeSupported(.continuousAutoFocus) {
             camera.focusMode = .continuousAutoFocus
@@ -145,6 +155,25 @@ final class CameraController: NSObject, ObservableObject {
                 return
             }
             connection.videoOrientation = orientation
+        }
+    }
+
+    // MARK: - QR code
+
+    func startScanning(onCode: @escaping (String) -> Void) {
+        self.onCode = onCode
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            if self.metadataOutput.availableMetadataObjectTypes.contains(.qr) {
+                self.metadataOutput.metadataObjectTypes = [.qr]
+            }
+        }
+    }
+
+    func stopScanning() {
+        onCode = nil
+        sessionQueue.async { [weak self] in
+            self?.metadataOutput.metadataObjectTypes = []
         }
     }
 
@@ -263,6 +292,22 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate {
         from connection: AVCaptureConnection
     ) {
         frameSink?.send(sampleBuffer)
+    }
+}
+
+extension CameraController: AVCaptureMetadataOutputObjectsDelegate {
+    func metadataOutput(
+        _ output: AVCaptureMetadataOutput,
+        didOutput metadataObjects: [AVMetadataObject],
+        from connection: AVCaptureConnection
+    ) {
+        guard let onCode else { return }
+        for object in metadataObjects {
+            if let code = object as? AVMetadataMachineReadableCodeObject, let text = code.stringValue {
+                onCode(text)
+                return
+            }
+        }
     }
 }
 

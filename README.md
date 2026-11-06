@@ -4,13 +4,13 @@ App que transforma um iPhone (mesmo antigo) em câmera para a transmissão do cu
 Faz parte do projeto [projeto-live](https://github.com/denysondetrano30/projeto-live),
 uma versão do OBS Studio feita para igrejas.
 
-## O que a versão 0.3 faz
+## O que a versão 0.4 faz
 
-- Aparece sozinho na rede (Bonjour, serviço `_projetolive._tcp`) com um nome fixo,
-  por exemplo "Câmera iPhone 4F2A". A fonte "Celular (Projeto Live)" do nosso OBS acha o iPhone por esse nome.
-- Manda a imagem da câmera para o OBS do PC pelo Wi-Fi, em Full HD (1920x1080, 30 quadros, 6 Mbps),
-  usando o protocolo SRT. Ainda sem áudio.
-- Mostra no topo o endereço para colocar no OBS e se o PC está conectado (bolinha verde).
+- **Pareamento por QR code.** No OBS, a fonte "Celular (Projeto Live)" mostra um QR code.
+  No app, toque em **Parear** e aponte para ele. A partir daí o iPhone liga sempre para aquela
+  fonte, com a senha dela, e reconecta sozinho se cair ou se o app for reaberto.
+- Manda a imagem da câmera para o OBS pelo Wi-Fi, em Full HD (1920x1080, 30 quadros, 6 Mbps),
+  usando o protocolo SRT com senha. Ainda sem áudio.
 - Usa a lente de zoom nos aparelhos que têm (como o iPhone 8 Plus): o 2x e o 3x ficam mais nítidos.
 - Funciona só com o celular deitado, porque a transmissão é 16:9. O vertical 9:16 é recortado no PC.
 - Grade de terços e recorte vertical 9:16, zoom 1x/2x/3x ou pinça, toque para focar,
@@ -18,20 +18,12 @@ uma versão do OBS Studio feita para igrejas.
 
 Funciona a partir do iOS 16 (iPhone 8 e mais novos).
 
-## Como receber a imagem no OBS
+## Plano B: sem pareamento
 
-No nosso OBS: adicione a fonte **Celular (Projeto Live)** e escolha o iPhone na lista.
-
-Em qualquer outro OBS, dá para receber à mão:
-
-1. iPhone e PC na mesma rede Wi-Fi (ou o PC no cabo do mesmo roteador).
-2. Abra o app. No topo aparece algo como `srt://192.168.0.15:9000`.
-3. No OBS, adicione uma **Fonte de mídia**, desmarque **Arquivo local** e preencha:
-   - **Entrada:** o endereço que aparece no iPhone, por exemplo `srt://192.168.0.15:9000`
-   - **Formato de entrada:** `mpegts`
-4. A bolinha no iPhone fica verde e a imagem aparece no OBS.
-
-Se o OBS desconectar, o iPhone volta a esperar sozinho.
+Sem pareamento, o iPhone espera na porta 9000 e mostra o endereço no topo
+(por exemplo `srt://192.168.0.15:9000`). No nosso OBS, digite esse endereço no campo
+"Plano B" da fonte "Celular". Em qualquer outro OBS, use uma **Fonte de mídia**
+sem "Arquivo local", com a **Entrada** `srt://IP-DO-IPHONE:9000` e o **Formato de entrada** `mpegts`.
 
 ## Como o app é montado
 

@@ -8,8 +8,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.3.0"
-    CURRENT_PROJECT_VERSION: "3"
+    MARKETING_VERSION: "0.4.0"
+    CURRENT_PROJECT_VERSION: "4"
 packages:
   # Biblioteca de transmissão (licença BSD-3). O SRT usa a libsrt (licença MPL 2.0).
   HaishinKit:
@@ -37,10 +37,8 @@ targets:
       path: Support/Info.plist
       properties:
         CFBundleDisplayName: Projeto Live
-        NSCameraUsageDescription: O Projeto Live usa a câmera para mandar a imagem para o computador da transmissão.
-        NSLocalNetworkUsageDescription: O Projeto Live usa a rede local para aparecer no OBS e mandar a imagem da câmera para o computador da transmissão.
-        NSBonjourServices:
-          - _projetolive._tcp
+        NSCameraUsageDescription: O Projeto Live usa a câmera para mandar a imagem para o computador da transmissão e para ler o QR code de pareamento.
+        NSLocalNetworkUsageDescription: O Projeto Live usa a rede local para mandar a imagem da câmera para o OBS no computador da transmissão.
         UILaunchScreen: {}
         UIRequiresFullScreen: true
         # Só deitado: a transmissão é 16:9 e o vertical é recortado no PC.

@@ -5,6 +5,9 @@ struct ContentView: View {
     @StateObject private var camera = CameraController()
     @StateObject private var link = PCLink()
     @State private var showGrid = true
+    @State private var isScanning = false
+    @State private var scanHint: String?
+    @State private var notice: String?
 
     private let zoomSteps: [CGFloat] = [1, 2, 3]
 
@@ -31,12 +34,25 @@ struct ContentView: View {
 
             statusMessage
 
-            VStack {
-                topBar
-                Spacer()
-                bottomBar
+            if isScanning {
+                scanningOverlay
+            } else {
+                VStack {
+                    topBar
+                    if let notice {
+                        Text(notice)
+                            .font(.subheadline.bold())
+                            .foregroundColor(.black)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.green)
+                            .cornerRadius(8)
+                    }
+                    Spacer()
+                    bottomBar
+                }
+                .padding(12)
             }
-            .padding(12)
         }
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
@@ -107,6 +123,82 @@ struct ContentView: View {
                     .padding(.horizontal, 6)
             }
             .buttonStyle(RoundButtonStyle(active: camera.isLocked))
+
+            Button {
+                startScanning()
+            } label: {
+                Label("Parear", systemImage: "qrcode.viewfinder")
+                    .font(.subheadline.bold())
+                    .frame(minHeight: 44)
+                    .padding(.horizontal, 6)
+            }
+            .buttonStyle(RoundButtonStyle(active: link.pairing == nil))
+        }
+    }
+
+    // MARK: - Pareamento por QR code
+
+    private var scanningOverlay: some View {
+        VStack(spacing: 14) {
+            Text("Aponte para o QR code na imagem da fonte \"Celular\" do OBS")
+                .font(.headline)
+                .multilineTextAlignment(.center)
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.yellow, lineWidth: 3)
+                .frame(width: 220, height: 220)
+            if let scanHint {
+                Text(scanHint)
+                    .font(.subheadline.bold())
+                    .foregroundColor(.yellow)
+            }
+            HStack(spacing: 12) {
+                Button("Cancelar") {
+                    stopScanning()
+                }
+                .buttonStyle(RoundButtonStyle(active: false))
+                if let pairing = link.pairing {
+                    Button("Desfazer pareamento com \"\(pairing.sourceName)\"") {
+                        link.setPairing(nil)
+                        stopScanning()
+                        showNotice("Pareamento desfeito")
+                    }
+                    .buttonStyle(RoundButtonStyle(active: false))
+                }
+            }
+            .font(.subheadline.bold())
+            .frame(minHeight: 44)
+        }
+        .foregroundColor(.white)
+        .padding(20)
+        .background(Color.black.opacity(0.55))
+        .cornerRadius(16)
+    }
+
+    private func startScanning() {
+        scanHint = nil
+        isScanning = true
+        camera.startScanning { text in
+            guard let pairing = Pairing.parse(text) else {
+                scanHint = "Esse QR code não é de uma fonte do Projeto Live"
+                return
+            }
+            link.setPairing(pairing)
+            stopScanning()
+            showNotice("Pareado com \"\(pairing.sourceName)\"")
+        }
+    }
+
+    private func stopScanning() {
+        camera.stopScanning()
+        isScanning = false
+    }
+
+    private func showNotice(_ text: String) {
+        notice = text
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+            if notice == text {
+                notice = nil
+            }
         }
     }
 
@@ -117,9 +209,11 @@ struct ContentView: View {
         case .noWifi:
             return "Sem Wi-Fi: conecte o iPhone na mesma rede do PC"
         case .waiting(let address):
-            return "Esperando o OBS · srt://\(address)"
-        case .sending(let address):
-            return "Enviando para o PC · srt://\(address)"
+            return "Sem pareamento · toque em Parear (ou no OBS use srt://\(address))"
+        case .connecting(let source):
+            return "Procurando o OBS (fonte \"\(source)\")…"
+        case .sending(let status):
+            return status
         case .failed(let message):
             return message
         }
@@ -129,7 +223,7 @@ struct ContentView: View {
         switch link.state {
         case .sending:
             return .green
-        case .waiting:
+        case .waiting, .connecting:
             return .yellow
         case .starting:
             return .gray
