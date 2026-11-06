@@ -55,12 +55,12 @@ struct ContentView: View {
             Circle()
                 .fill(linkColor)
                 .frame(width: 10, height: 10)
-            Text(linkText)
+            Text("\(link.cameraName) · \(linkText)")
                 .font(.caption.bold())
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             Spacer()
-            Text("v0.2")
+            Text("v\(PCLink.appVersion)")
                 .font(.caption2)
                 .opacity(0.6)
             Text(String(format: "%.1fx", Double(camera.zoomFactor)))
@@ -117,7 +117,7 @@ struct ContentView: View {
         case .noWifi:
             return "Sem Wi-Fi: conecte o iPhone na mesma rede do PC"
         case .waiting(let address):
-            return "Esperando o OBS · no OBS, use srt://\(address)"
+            return "Esperando o OBS · srt://\(address)"
         case .sending(let address):
             return "Enviando para o PC · srt://\(address)"
         case .failed(let message):

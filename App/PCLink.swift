@@ -19,8 +19,14 @@ final class PCLink: ObservableObject {
     }
 
     static let port = 9000
+    static let appVersion = "0.3"
 
     @Published private(set) var state: State = .starting
+
+    /// Nome fixo desta câmera na rede, por exemplo "Câmera iPhone 4F2A".
+    /// É sorteado na primeira vez e fica guardado no aparelho.
+    let cameraName: String = PCLink.makeCameraName()
+    private lazy var announcer = Announcer(cameraName: cameraName, srtPort: PCLink.port, appVersion: PCLink.appVersion)
 
     /// Vídeo Full HD deitado, 30 quadros por segundo, 6 Mbps (folgado para a rede local).
     private static let videoSettings = VideoCodecSettings(
@@ -38,6 +44,7 @@ final class PCLink: ObservableObject {
 
     func start() {
         guard loopTask == nil else { return }
+        announcer.start()
         loopTask = Task.detached(priority: .userInitiated) { [weak self] in
             await self?.runLoop()
         }
@@ -101,6 +108,20 @@ final class PCLink: ObservableObject {
     }
 
     // MARK: - Ajudantes
+
+    private static func makeCameraName() -> String {
+        let key = "projetolive.cameraID"
+        let defaults = UserDefaults.standard
+        let id: String
+        if let saved = defaults.string(forKey: key), !saved.isEmpty {
+            id = saved
+        } else {
+            let raw = String(Int.random(in: 0...0xFFFF), radix: 16, uppercase: true)
+            id = String(repeating: "0", count: max(0, 4 - raw.count)) + raw
+            defaults.set(id, forKey: key)
+        }
+        return "Câmera iPhone \(id)"
+    }
 
     private func currentStream() -> SRTStream? {
         lock.lock()

@@ -4,8 +4,10 @@ App que transforma um iPhone (mesmo antigo) em câmera para a transmissão do cu
 Faz parte do projeto [projeto-live](https://github.com/denysondetrano30/projeto-live),
 uma versão do OBS Studio feita para igrejas.
 
-## O que a versão 0.2 faz
+## O que a versão 0.3 faz
 
+- Aparece sozinho na rede (Bonjour, serviço `_projetolive._tcp`) com um nome fixo,
+  por exemplo "Câmera iPhone 4F2A". A fonte "Celular (Projeto Live)" do nosso OBS acha o iPhone por esse nome.
 - Manda a imagem da câmera para o OBS do PC pelo Wi-Fi, em Full HD (1920x1080, 30 quadros, 6 Mbps),
   usando o protocolo SRT. Ainda sem áudio.
 - Mostra no topo o endereço para colocar no OBS e se o PC está conectado (bolinha verde).
@@ -17,6 +19,10 @@ uma versão do OBS Studio feita para igrejas.
 Funciona a partir do iOS 16 (iPhone 8 e mais novos).
 
 ## Como receber a imagem no OBS
+
+No nosso OBS: adicione a fonte **Celular (Projeto Live)** e escolha o iPhone na lista.
+
+Em qualquer outro OBS, dá para receber à mão:
 
 1. iPhone e PC na mesma rede Wi-Fi (ou o PC no cabo do mesmo roteador).
 2. Abra o app. No topo aparece algo como `srt://192.168.0.15:9000`.
