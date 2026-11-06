@@ -4,8 +4,10 @@ App que transforma um iPhone (mesmo antigo) em câmera para a transmissão do cu
 Faz parte do projeto [projeto-live](https://github.com/denysondetrano30/projeto-live),
 uma versão do OBS Studio feita para igrejas.
 
-## O que a versão 0.4 faz
+## O que a versão 0.5 faz
 
+- **Cabo USB.** No OBS, escolha "Cabo USB (iPhone)" na fonte "Celular". O app espera na porta 9010
+  e manda o vídeo em H.264/MPEG-TS pelo cabo (no Windows, pelo serviço Apple Mobile Device do iTunes).
 - **Pareamento por QR code.** No OBS, a fonte "Celular (Projeto Live)" mostra um QR code.
   No app, toque em **Parear** e aponte para ele. A partir daí o iPhone liga sempre para aquela
   fonte, com a senha dela, e reconecta sozinho se cair ou se o app for reaberto.

@@ -22,7 +22,7 @@ final class PCLink: ObservableObject {
     }
 
     static let port = 9000
-    static let appVersion = "0.4"
+    static let appVersion = "0.5"
 
     @Published private(set) var state: State = .starting
     @Published private(set) var pairing: Pairing?

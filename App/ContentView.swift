@@ -4,6 +4,7 @@ import UIKit
 struct ContentView: View {
     @StateObject private var camera = CameraController()
     @StateObject private var link = PCLink()
+    @StateObject private var usb = USBLink()
     @State private var showGrid = true
     @State private var isScanning = false
     @State private var scanHint: String?
@@ -58,9 +59,15 @@ struct ContentView: View {
         .persistentSystemOverlays(.hidden)
         .onAppear {
             UIApplication.shared.isIdleTimerDisabled = true
-            camera.attach(link)
+            let wifi = link
+            let cable = usb
+            camera.attach { buffer in
+                wifi.send(buffer)
+                cable.send(buffer)
+            }
             camera.start()
             link.start()
+            usb.start()
         }
     }
 
@@ -203,6 +210,9 @@ struct ContentView: View {
     }
 
     private var linkText: String {
+        if usb.isConnected {
+            return "Cabo USB · enviando para o PC"
+        }
         switch link.state {
         case .starting:
             return "Preparando o envio para o PC…"
@@ -220,6 +230,9 @@ struct ContentView: View {
     }
 
     private var linkColor: Color {
+        if usb.isConnected {
+            return .green
+        }
         switch link.state {
         case .sending:
             return .green

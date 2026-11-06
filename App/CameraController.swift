@@ -27,7 +27,7 @@ final class CameraController: NSObject, ObservableObject {
     /// Chamado com o texto de cada QR code lido (só na fila principal, e só no modo Parear).
     private var onCode: ((String) -> Void)?
     /// Lido e trocado só na `videoOutputQueue`.
-    private var frameSink: PCLink?
+    private var frameSink: ((CMSampleBuffer) -> Void)?
     private var device: AVCaptureDevice?
     private var maxZoomOnQueue: CGFloat = 1.0
     private var lockedOnQueue = false
@@ -38,10 +38,10 @@ final class CameraController: NSObject, ObservableObject {
 
     // MARK: - Ligar a câmera
 
-    /// Liga a câmera ao envio para o PC. Cada quadro passa a ir também para o `link`.
-    func attach(_ link: PCLink) {
+    /// Liga a câmera aos envios para o PC (Wi-Fi e cabo). Cada quadro passa também por `sink`.
+    func attach(_ sink: @escaping (CMSampleBuffer) -> Void) {
         videoOutputQueue.async {
-            self.frameSink = link
+            self.frameSink = sink
         }
     }
 
@@ -291,7 +291,7 @@ extension CameraController: AVCaptureVideoDataOutputSampleBufferDelegate {
         didOutput sampleBuffer: CMSampleBuffer,
         from connection: AVCaptureConnection
     ) {
-        frameSink?.send(sampleBuffer)
+        frameSink?(sampleBuffer)
     }
 }
 
