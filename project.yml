@@ -1,0 +1,43 @@
+# Projeto do app de iPhone, no formato do XcodeGen.
+# O GitHub gera o projeto do Xcode a partir deste arquivo na hora de montar o app.
+name: ProjetoLive
+options:
+  bundleIdPrefix: com.denysondetrano30
+  deploymentTarget:
+    iOS: "16.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  ProjetoLive:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+    settings:
+      base:
+        PRODUCT_NAME: ProjetoLive
+        PRODUCT_BUNDLE_IDENTIFIER: com.denysondetrano30.projetolive.camera
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGNING_ALLOWED: "NO"
+        CODE_SIGNING_REQUIRED: "NO"
+    info:
+      path: Support/Info.plist
+      properties:
+        CFBundleDisplayName: Projeto Live
+        NSCameraUsageDescription: O Projeto Live usa a câmera para mandar a imagem para o computador da transmissão.
+        UILaunchScreen: {}
+        UIRequiresFullScreen: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+schemes:
+  ProjetoLive:
+    build:
+      targets:
+        ProjetoLive: all

@@ -1,0 +1,6 @@
+# Gerados na hora de montar o app
+*.xcodeproj/
+build/
+Payload/
+*.ipa
+.DS_Store
