@@ -40,6 +40,8 @@ final class USBLink: ObservableObject {
     private let lock = NSLock()
     /// Onde os avisos do diretor que chegam pelo cabo são mostrados.
     weak var inbox: DirectorInbox?
+    /// Intercom: recebe quem está falando (a voz pelo cabo usa a porta 9012, em `IntercomLink`).
+    weak var intercom: IntercomLink?
     private var sending = false
 
     func start(cameraName: String) {
@@ -116,6 +118,7 @@ final class USBLink: ObservableObject {
                 self.receiveControl(on: newConnection)
             case .failed, .cancelled:
                 self.controlConnection = nil
+                self.intercom?.setVoice("-", cable: true)
             default:
                 break
             }
@@ -144,6 +147,8 @@ final class USBLink: ObservableObject {
             notifyTally(true)
         } else if line == "TALLY off" {
             notifyTally(false)
+        } else if line.hasPrefix("VOICE ") {
+            intercom?.setVoice(String(line.dropFirst(6)), cable: true)
         } else if let command = DirectorInbox.parse(line) {
             let number = command.number
             inbox?.receive(number: number, text: command.text) { [weak self] in

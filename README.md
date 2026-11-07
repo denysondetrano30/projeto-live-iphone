@@ -4,8 +4,14 @@ App que transforma um iPhone (mesmo antigo) em câmera para a transmissão do cu
 Faz parte do projeto [projeto-live](https://github.com/denysondetrano30/projeto-live),
 uma versão do OBS Studio feita para igrejas.
 
-## O que a versão 0.7 faz
+## O que a versão 0.8 faz
 
+- **Intercom.** O botão **Segure para falar** leva a voz do operador ao fone do diretor e aos outros
+  celulares (canal geral). O diretor fala com todos ou só com uma câmera pelo painel do OBS, e no
+  alto da tela aparece quem está falando. O som só toca com fone de ouvido; sem fone, o app avisa.
+  O microfone só é usado enquanto o botão estiver apertado, e essa voz nunca vai para a live.
+  Voz em 16 kHz sem compressão: pelo Wi-Fi vai por UDP (porta que o OBS informa no canal de
+  controle); pelo cabo, pela porta 9012 do app.
 - **Avisos do diretor.** No OBS, o painel "Diretor (Projeto Live)" (menu Painéis) e os atalhos de
   teclado mandam avisos para cada câmera: "Abre", "Fecha", "Foca no pregador", "Você está no ar"
   ou um texto livre. O aviso aparece grande na tela do iPhone, que vibra se a câmera não estiver no

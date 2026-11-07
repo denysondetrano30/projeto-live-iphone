@@ -25,7 +25,7 @@ final class PCLink: ObservableObject {
     }
 
     static let port = 9000
-    static let appVersion = "0.7"
+    static let appVersion = "0.8"
 
     @Published private(set) var state: State = .starting
     @Published private(set) var pairing: Pairing?
@@ -54,6 +54,8 @@ final class PCLink: ObservableObject {
     private let control = ControlLink()
     /// Onde os avisos do diretor que chegam pelo Wi-Fi são mostrados.
     weak var inbox: DirectorInbox?
+    /// Intercom: recebe a porta da voz e quem está falando, que chegam pelo canal de controle.
+    weak var intercom: IntercomLink?
 
     init() {
         let saved = PairingStore.load()
@@ -63,6 +65,12 @@ final class PCLink: ObservableObject {
             DispatchQueue.main.async {
                 self?.onAir = value
             }
+        }
+        control.onAudio = { [weak self] route in
+            self?.intercom?.setWifiRoute(route)
+        }
+        control.onVoice = { [weak self] text in
+            self?.intercom?.setVoice(text, cable: false)
         }
         control.onCommand = { [weak self] number, text in
             guard let self else { return }

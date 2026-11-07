@@ -10,6 +10,7 @@ import Network
 /// - app → OBS: `HELLO <HMAC-SHA256(senha do QR code, desafio) em hex> <nome da câmera>`
 /// - OBS → app: `OK`, depois `TALLY on` (no ar) ou `TALLY off` sempre que mudar
 /// - OBS → app: `CMD <número> <texto>` (aviso do diretor); app → OBS: `ACK <número>` no "Entendi"
+/// - OBS → app: `AUDIO <porta UDP> <ficha>` e `VOICE <quem fala>` (intercom, veja `IntercomLink`)
 /// - os dois lados: `PING` a cada 2 segundos; 6 segundos sem nada = caiu, e o app reconecta
 ///
 /// Assim a senha nunca passa pela rede. Pelo cabo USB, as linhas `TALLY` chegam pelo próprio
@@ -19,6 +20,10 @@ final class ControlLink {
     var onTally: ((Bool) -> Void)?
     /// Chamado (na fila do canal) com cada aviso do diretor.
     var onCommand: ((UInt32, String) -> Void)?
+    /// Intercom: caminho da voz pelo Wi-Fi (nil quando o canal cai).
+    var onAudio: ((IntercomLink.WifiRoute?) -> Void)?
+    /// Intercom: quem está falando ("-" = ninguém).
+    var onVoice: ((String) -> Void)?
 
     private struct Target: Equatable {
         let host: String
@@ -71,6 +76,8 @@ final class ControlLink {
             self.timer = nil
             self.disconnect()
             self.setTally(false)
+            self.onAudio?(nil)
+            self.onVoice?("-")
         }
     }
 
@@ -121,6 +128,8 @@ final class ControlLink {
     private func lost() {
         disconnect()
         setTally(false)
+        onAudio?(nil)
+        onVoice?("-")
     }
 
     private func receive(on connection: NWConnection, attempt thisAttempt: Int) {
@@ -163,6 +172,15 @@ final class ControlLink {
             setTally(false)
         } else if let command = DirectorInbox.parse(line) {
             onCommand?(command.number, command.text)
+        } else if line.hasPrefix("AUDIO ") {
+            let parts = line.split(separator: " ")
+            if parts.count >= 3, let port = UInt16(parts[1]), let token = Data(hex: String(parts[2])),
+                token.count == 8
+            {
+                onAudio?(IntercomLink.WifiRoute(host: target.host, port: port, token: token))
+            }
+        } else if line.hasPrefix("VOICE ") {
+            onVoice?(String(line.dropFirst(6)))
         } else if line.hasPrefix("ERR") {
             // Senha recusada (o OBS gerou um QR code novo). O vídeo também vai parar de conectar.
             lost()

@@ -7,7 +7,9 @@ struct ContentView: View {
     @StateObject private var link = PCLink()
     @StateObject private var usb = USBLink()
     @StateObject private var inbox = DirectorInbox()
+    @StateObject private var intercom = IntercomLink()
     @State private var showGrid = true
+    @State private var talkPressed = false
     @State private var isScanning = false
     @State private var scanHint: String?
     @State private var notice: String?
@@ -60,6 +62,26 @@ struct ContentView: View {
                             .background(Color.green)
                             .cornerRadius(8)
                     }
+                    if let speaking = intercom.speaking {
+                        HStack {
+                            Label(speaking, systemImage: "speaker.wave.2.fill")
+                                .font(.subheadline.bold())
+                                .foregroundColor(.black)
+                                .lineLimit(1)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.green)
+                                .cornerRadius(8)
+                            Spacer()
+                        }
+                    }
+                    Spacer()
+                    if intercom.isAvailable {
+                        HStack {
+                            Spacer()
+                            talkButton
+                        }
+                    }
                     Spacer()
                     bottomBar
                 }
@@ -86,6 +108,9 @@ struct ContentView: View {
             UIApplication.shared.isIdleTimerDisabled = true
             link.inbox = inbox
             usb.inbox = inbox
+            link.intercom = intercom
+            usb.intercom = intercom
+            intercom.start()
             let wifi = link
             let cable = usb
             camera.attach { buffer in
@@ -183,6 +208,63 @@ struct ContentView: View {
             }
             .buttonStyle(RoundButtonStyle(active: link.pairing == nil))
         }
+    }
+
+    // MARK: - Intercom
+
+    /// "Segure para falar": fala enquanto o dedo estiver no botão.
+    private var talkButton: some View {
+        VStack(spacing: 6) {
+            ZStack {
+                Circle()
+                    .fill(talkPressed ? Color.red : Color.black.opacity(0.55))
+                    .frame(width: 84, height: 84)
+                Circle()
+                    .stroke(Color.white.opacity(0.8), lineWidth: 2)
+                    .frame(width: 84, height: 84)
+                Image(systemName: talkPressed ? "mic.fill" : "mic")
+                    .font(.system(size: 32, weight: .bold))
+                    .foregroundColor(.white)
+            }
+            .contentShape(Circle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        if !talkPressed {
+                            talkPressed = true
+                            intercom.setTalking(true)
+                        }
+                    }
+                    .onEnded { _ in
+                        talkPressed = false
+                        intercom.setTalking(false)
+                    }
+            )
+            Text(talkPressed ? "Falando…" : "Segure para falar")
+                .font(.caption.bold())
+                .foregroundColor(.white)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color.black.opacity(0.55))
+                .cornerRadius(6)
+            if intercom.micDenied {
+                hint("Microfone bloqueado: libere em Ajustes > Projeto Live")
+            } else if !intercom.hasHeadset {
+                hint("Ligue um fone para ouvir o intercom")
+            }
+        }
+        .frame(maxWidth: 150)
+    }
+
+    private func hint(_ text: String) -> some View {
+        Text(text)
+            .font(.caption2.bold())
+            .multilineTextAlignment(.center)
+            .foregroundColor(.black)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(Color.yellow)
+            .cornerRadius(6)
     }
 
     // MARK: - Aviso do diretor
