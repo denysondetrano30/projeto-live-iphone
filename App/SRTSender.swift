@@ -12,7 +12,8 @@ import libsrt
 /// - Plano B: espera o OBS ligar (`listener`) na porta 9000, sem senha.
 final class SRTSender {
     private static let messageSize = 1316
-    private static let latencyMs: Int32 = 120
+    /// Folga para reenviar pacotes perdidos: 60 ms basta numa rede local (o padrão do SRT é 120).
+    private static let latencyMs: Int32 = 60
     private static let startup: Void = {
         _ = srt_startup()
     }()

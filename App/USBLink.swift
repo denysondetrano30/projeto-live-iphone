@@ -375,7 +375,9 @@ final class H264Encoder {
             (kVTCompressionPropertyKey_AverageBitRate, NSNumber(value: 6_000_000)),
             (kVTCompressionPropertyKey_ExpectedFrameRate, NSNumber(value: 30)),
             (kVTCompressionPropertyKey_MaxKeyFrameInterval, NSNumber(value: 30)),
-            (kVTCompressionPropertyKey_MaxKeyFrameIntervalDuration, NSNumber(value: 1))
+            (kVTCompressionPropertyKey_MaxKeyFrameIntervalDuration, NSNumber(value: 1)),
+            // Cada quadro sai do codificador assim que fica pronto (sem esperar os próximos).
+            (kVTCompressionPropertyKey_MaxFrameDelayCount, NSNumber(value: 0))
         ]
         for (key, value) in settings {
             _ = VTSessionSetProperty(newSession, key: key, value: value)
