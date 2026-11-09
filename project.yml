@@ -8,13 +8,14 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.8.0"
-    CURRENT_PROJECT_VERSION: "8"
+    MARKETING_VERSION: "0.9.0"
+    CURRENT_PROJECT_VERSION: "9"
 packages:
-  # Biblioteca de transmissão (licença BSD-3). O SRT usa a libsrt (licença MPL 2.0).
-  HaishinKit:
-    url: https://github.com/HaishinKit/HaishinKit.swift
-    exactVersion: 2.3.0
+  # libsrt (licença MPL 2.0) empacotada para iPhone pelo projeto HaishinKit. O app comprime e
+  # empacota o vídeo ele mesmo e usa só o SRT dela (veja App/SRTSender.swift).
+  libsrt:
+    url: https://github.com/HaishinKit/libsrt-xcframework.git
+    exactVersion: 1.5.7
 targets:
   ProjetoLive:
     type: application
@@ -22,10 +23,8 @@ targets:
     sources:
       - path: App
     dependencies:
-      - package: HaishinKit
-        product: HaishinKit
-      - package: HaishinKit
-        product: SRTHaishinKit
+      - package: libsrt
+        product: libsrt
     settings:
       base:
         PRODUCT_NAME: ProjetoLive

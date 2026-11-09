@@ -1,10 +1,10 @@
 import AVFoundation
 import Foundation
-import HaishinKit
-import SRTHaishinKit
-import VideoToolbox
 
 /// Manda a imagem da câmera para o OBS do PC pelo Wi-Fi, usando o protocolo SRT.
+///
+/// O vídeo é comprimido e empacotado pelo próprio app (`H264Encoder` + `TSMuxer`, os mesmos do cabo
+/// USB), com o PTS no relógio do iPhone (`PhoneClock`), e vai pelo SRT (`SRTSender`).
 ///
 /// Pareado (leu o QR code de uma fonte "Celular" no OBS): o iPhone liga para o PC, na porta e
 /// com a senha daquela fonte, e reconecta sozinho se cair.
@@ -25,7 +25,7 @@ final class PCLink: ObservableObject {
     }
 
     static let port = 9000
-    static let appVersion = "0.8"
+    static let appVersion = "0.9"
 
     @Published private(set) var state: State = .starting
     @Published private(set) var pairing: Pairing?
@@ -35,19 +35,12 @@ final class PCLink: ObservableObject {
     /// Nome fixo desta câmera, por exemplo "Câmera iPhone 4F2A". É sorteado na primeira vez.
     let cameraName: String = PCLink.makeCameraName()
 
-    /// Vídeo Full HD deitado, 30 quadros por segundo, 6 Mbps (folgado para a rede local).
-    private static let videoSettings = VideoCodecSettings(
-        videoSize: CGSize(width: 1920, height: 1080),
-        bitRate: 6_000_000,
-        profileLevel: kVTProfileLevel_H264_High_AutoLevel as String,
-        maxKeyFrameIntervalDuration: 1,
-        allowFrameReordering: false,
-        expectedFrameRate: 30
-    )
-
+    // Vídeo Full HD deitado, 30 quadros por segundo, 6 Mbps (veja `H264Encoder`).
     private let lock = NSLock()
-    private var activeStream: SRTStream?
-    private var currentConnection: SRTConnection?
+    private let encoder = H264Encoder()
+    private let muxer = TSMuxer()
+    private let sender = SRTSender()
+    private var sending = false
     private var pairingForLoop: Pairing?
     private var generation = 0
     private var loopTask: Task<Void, Never>?
@@ -91,24 +84,17 @@ final class PCLink: ObservableObject {
     func setPairing(_ newPairing: Pairing?) {
         PairingStore.save(newPairing)
         pairing = newPairing
-        let connection: SRTConnection? = locked {
+        locked {
             pairingForLoop = newPairing
             generation += 1
-            return currentConnection
         }
-        if let connection {
-            Task {
-                await connection.close()
-            }
-        }
+        sender.close()
     }
 
     /// Recebe cada quadro da câmera (na fila de vídeo) e repassa ao OBS, se estiver conectado.
     func send(_ sampleBuffer: CMSampleBuffer) {
-        guard let stream = locked({ activeStream }) else { return }
-        Task {
-            await stream.append(sampleBuffer)
-        }
+        guard locked({ sending }) else { return }
+        encoder.encode(sampleBuffer)
     }
 
     // MARK: - Ciclo de conexão
@@ -134,10 +120,9 @@ final class PCLink: ObservableObject {
         publish(.connecting(source: pairing.sourceName))
         for host in pairing.orderedHosts(phoneIP: phoneIP) {
             if pairingChanged(since: startGeneration) { return }
-            let url = "srt://\(host):\(pairing.port)?mode=caller&passphrase=\(pairing.key)&pbkeylen=16"
             let status = "Enviando para \"\(pairing.sourceName)\" no OBS"
             let control = (host: host, port: pairing.port, key: pairing.key)
-            let connected = await stream(to: url, status: status, generation: startGeneration, control: control)
+            let connected = await stream(to: control, status: status, generation: startGeneration, control: control)
             if connected {
                 return
             }
@@ -150,9 +135,8 @@ final class PCLink: ObservableObject {
     private func runUnpaired(phoneIP: String) async {
         let address = "\(phoneIP):\(Self.port)"
         publish(.waiting(address: address))
-        let url = "srt://0.0.0.0:\(Self.port)?mode=listener"
         let connected = await stream(
-            to: url,
+            to: nil,
             status: "Enviando para o PC · srt://\(address)",
             generation: nil,
             control: nil
@@ -164,53 +148,47 @@ final class PCLink: ObservableObject {
 
     /// Conecta, manda a imagem enquanto a conexão durar e devolve true se chegou a conectar.
     /// Com `control`, abre também o canal de controle no mesmo endereço (aviso de "no ar").
+    /// `target` nil = plano B: espera o OBS ligar na porta 9000.
     private func stream(
-        to url: String,
+        to target: (host: String, port: Int, key: String)?,
         status: String,
         generation startGeneration: Int?,
-        control target: (host: String, port: Int, key: String)?
+        control: (host: String, port: Int, key: String)?
     ) async -> Bool {
-        let connection = SRTConnection()
-        let stream = SRTStream(connection: connection)
-        do {
-            try await stream.setVideoSettings(Self.videoSettings)
-        } catch {
-            publish(.failed("Erro na configuração do vídeo. Avise o Claude."))
-            return false
-        }
-        await stream.setExpectedMedias([.video])
-
-        locked { currentConnection = connection }
-        defer { locked { currentConnection = nil } }
-
-        do {
-            try await connection.connect(URL(string: url))
-        } catch {
-            return false
-        }
-        let isConnected = await connection.connected
-        if !isConnected {
-            await connection.close()
+        let sender = self.sender
+        let connected: Bool = await Task.detached(priority: .userInitiated) {
+            if let target {
+                return sender.connect(host: target.host, port: target.port, passphrase: target.key)
+            }
+            return sender.listen(port: Self.port)
+        }.value
+        guard connected else {
+            sender.close()
             return false
         }
 
-        await stream.publish()
-        locked { activeStream = stream }
+        muxer.reset()
+        encoder.start { [weak self] accessUnit, pts, isKeyFrame in
+            guard let self else { return }
+            let packets = self.muxer.mux(accessUnit: accessUnit, pts: pts, isKeyFrame: isKeyFrame)
+            self.sender.send(packets)
+        }
+        locked { sending = true }
         publish(.sending(status))
-        if let target {
-            control.start(host: target.host, port: target.port, key: target.key, cameraName: cameraName)
+        if let control {
+            self.control.start(host: control.host, port: control.port, key: control.key, cameraName: cameraName)
         }
 
         while !Task.isCancelled {
             if let startGeneration, pairingChanged(since: startGeneration) { break }
-            let stillConnected = await connection.connected
-            if !stillConnected { break }
+            if !sender.isConnected { break }
             try? await Task.sleep(nanoseconds: 500_000_000)
         }
 
-        locked { activeStream = nil }
-        control.stop()
-        await connection.close()
+        locked { sending = false }
+        encoder.stop()
+        self.control.stop()
+        sender.close()
         return true
     }
 

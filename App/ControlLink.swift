@@ -11,6 +11,8 @@ import Network
 /// - OBS → app: `OK`, depois `TALLY on` (no ar) ou `TALLY off` sempre que mudar
 /// - OBS → app: `CMD <número> <texto>` (aviso do diretor); app → OBS: `ACK <número>` no "Entendi"
 /// - OBS → app: `AUDIO <porta UDP> <ficha>` e `VOICE <quem fala>` (intercom, veja `IntercomLink`)
+/// - OBS → app: `TIME <hora do PC>`; app → OBS: `TIME <hora do PC> <hora do iPhone>` (sincronia,
+///   veja `PhoneClock`)
 /// - os dois lados: `PING` a cada 2 segundos; 6 segundos sem nada = caiu, e o app reconecta
 ///
 /// Assim a senha nunca passa pela rede. Pelo cabo USB, as linhas `TALLY` chegam pelo próprio
@@ -179,6 +181,8 @@ final class ControlLink {
             {
                 onAudio?(IntercomLink.WifiRoute(host: target.host, port: port, token: token))
             }
+        } else if let reply = PhoneClock.timeReply(line) {
+            send(reply)
         } else if line.hasPrefix("VOICE ") {
             onVoice?(String(line.dropFirst(6)))
         } else if line.hasPrefix("ERR") {

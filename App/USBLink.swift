@@ -147,6 +147,8 @@ final class USBLink: ObservableObject {
             notifyTally(true)
         } else if line == "TALLY off" {
             notifyTally(false)
+        } else if let reply = PhoneClock.timeReply(line) {
+            sendControl(reply)
         } else if line.hasPrefix("VOICE ") {
             intercom?.setVoice(String(line.dropFirst(6)), cable: true)
         } else if let command = DirectorInbox.parse(line) {
@@ -292,13 +294,11 @@ final class H264Encoder {
     private var session: VTCompressionSession?
     private var output: Output?
     private var forceKeyFrame = true
-    private var firstTime: CMTime?
 
     func start(output: @escaping Output) {
         lock.lock()
         self.output = output
         forceKeyFrame = true
-        firstTime = nil
         lock.unlock()
     }
 
@@ -327,17 +327,12 @@ final class H264Encoder {
         let session = self.session
         let force = forceKeyFrame
         forceKeyFrame = false
-        if firstTime == nil {
-            firstTime = time
-        }
-        let start = firstTime ?? time
         lock.unlock()
 
         guard let session else { return }
 
-        // Relógio de 90 kHz do MPEG-TS, começando em 1 s.
-        let seconds = CMTimeGetSeconds(CMTimeSubtract(time, start))
-        let pts = UInt64(max(0, seconds) * 90_000) + 90_000
+        // PTS = relógio do iPhone na hora em que o quadro foi filmado (veja `PhoneClock`).
+        let pts = PhoneClock.pts90k(time)
 
         var properties: CFDictionary?
         if force {
