@@ -12,6 +12,7 @@ final class AACEncoder {
     var output: ((Data, UInt64) -> Void)?
 
     private static let samplesPerPacket = 1024
+    private static let encoderDelay: Int64 = 2112
     /// Diferença maior que isso entre a hora do som e a contagem de amostras: recomeça a contagem.
     private static let maxDrift = 0.05
 
@@ -124,7 +125,9 @@ final class AACEncoder {
             var frame = Data(adtsHeader(payloadSize: size))
             frame.append(base + Int(description.mStartOffset), count: size)
 
-            let seconds = anchor + Double(samplesOut) / sampleRate
+            // O codificador AAC da Apple põe 2112 amostras de "aquecimento" na frente: tira da conta,
+            // para o som não sair atrasado em relação à imagem.
+            let seconds = anchor + Double(samplesOut - Self.encoderDelay) / sampleRate
             samplesOut += Int64(Self.samplesPerPacket)
             let time = CMTime(seconds: seconds, preferredTimescale: 1_000_000_000)
             output?(frame, PhoneClock.pts90k(time))
