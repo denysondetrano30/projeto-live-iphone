@@ -8,6 +8,7 @@ struct ContentView: View {
     @StateObject private var usb = USBLink()
     @StateObject private var inbox = DirectorInbox()
     @StateObject private var intercom = IntercomLink()
+    @State private var audioEncoder = AACEncoder()
     @State private var showGrid = true
     @State private var talkPressed = false
     @State private var isScanning = false
@@ -116,6 +117,15 @@ struct ContentView: View {
             camera.attach { buffer in
                 wifi.send(buffer)
                 cable.send(buffer)
+            }
+            // Som do microfone junto com a imagem (o mesmo microfone do intercom).
+            audioEncoder.output = { adts, pts in
+                wifi.sendAudio(adts, pts: pts)
+                cable.sendAudio(adts, pts: pts)
+            }
+            let encoder = audioEncoder
+            intercom.cameraAudio = { buffer, time, silent in
+                encoder.encode(buffer, time: time, silent: silent)
             }
             camera.start()
             link.start()

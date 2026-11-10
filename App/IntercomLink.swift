@@ -15,7 +15,17 @@ import Network
 /// - Cabo: o OBS conecta na porta 9012 do app; cada pacote vai precedido do tamanho (2 bytes).
 ///
 /// O som só toca com fone de ouvido, para a voz do intercom não vazar no ambiente.
+///
+/// O mesmo microfone também vai para a câmera (`cameraAudio`): o som que acompanha a imagem no OBS.
+/// Um microfone ligado no USB-C/Lightning (como um receptor sem fio) é preferido. Enquanto a pessoa
+/// fala no intercom, a câmera manda silêncio, para a conversa não entrar na live.
 final class IntercomLink: ObservableObject {
+    /// Som do microfone para a câmera: pedaço, hora (relógio do iPhone) e se deve ir em silêncio.
+    /// Chamado na thread de som.
+    var cameraAudio: ((AVAudioPCMBuffer, AVAudioTime, Bool) -> Void)?
+    private let talkingLock = NSLock()
+    private var talkingNow = false
+
     struct WifiRoute: Equatable {
         let host: String
         let port: UInt16
@@ -122,6 +132,9 @@ final class IntercomLink: ObservableObject {
                 self.askMicrophone()
             }
             self.talking = value
+            self.talkingLock.lock()
+            self.talkingNow = value
+            self.talkingLock.unlock()
             if !value {
                 self.pending.removeAll()
             }
@@ -186,10 +199,14 @@ final class IntercomLink: ObservableObject {
             engine.connect(player, to: engine.mainMixerNode, format: playFormat)
             playerAttached = true
         }
+        preferExternalMicrophone()
         if session.recordPermission == .granted {
             installTap()
         } else if session.recordPermission == .denied {
             publishMicDenied(true)
+        } else {
+            // O som da câmera precisa do microfone desde o começo (não só no "Segure para falar").
+            askMicrophone()
         }
         runEngine()
         updateHeadset()
@@ -248,6 +265,16 @@ final class IntercomLink: ObservableObject {
         runEngine()
     }
 
+    /// Microfone ligado no USB-C/Lightning (receptor sem fio, interface de áudio) tem preferência.
+    private func preferExternalMicrophone() {
+        let session = AVAudioSession.sharedInstance()
+        guard let usb = session.availableInputs?.first(where: { $0.portType == .usbAudio || $0.portType == .headsetMic })
+        else { return }
+        if session.preferredInput?.uid != usb.uid {
+            try? session.setPreferredInput(usb)
+        }
+    }
+
     private func installTap() {
         guard !tapInstalled else { return }
         let input = engine.inputNode
@@ -256,7 +283,7 @@ final class IntercomLink: ObservableObject {
             let converter = AVAudioConverter(from: format, to: sendFormat)
         else { return }
         let sendFormat = self.sendFormat
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, when in
             // Thread de som: só converte para 16 kHz e passa para a fila do intercom.
             let capacity = AVAudioFrameCount(Double(buffer.frameLength) * 16_000 / format.sampleRate + 64)
             guard let converted = AVAudioPCMBuffer(pcmFormat: sendFormat, frameCapacity: capacity) else { return }
@@ -271,10 +298,18 @@ final class IntercomLink: ObservableObject {
                 status.pointee = .haveData
                 return buffer
             }
-            guard error == nil, converted.frameLength > 0, let channel = converted.int16ChannelData else { return }
-            let samples = Array(UnsafeBufferPointer(start: channel[0], count: Int(converted.frameLength)))
-            self?.queue.async {
-                self?.captured(samples)
+            if error == nil, converted.frameLength > 0, let channel = converted.int16ChannelData {
+                let samples = Array(UnsafeBufferPointer(start: channel[0], count: Int(converted.frameLength)))
+                self?.queue.async {
+                    self?.captured(samples)
+                }
+            }
+            // Depois do intercom: o som da câmera (silêncio enquanto alguém fala no intercom).
+            if let self, let cameraAudio = self.cameraAudio {
+                self.talkingLock.lock()
+                let silent = self.talkingNow
+                self.talkingLock.unlock()
+                cameraAudio(buffer, when, silent)
             }
         }
         tapInstalled = true
@@ -338,7 +373,10 @@ final class IntercomLink: ObservableObject {
         observers.append(
             center.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: nil) {
                 [weak self] _ in
-                self?.queue.async { self?.updateHeadset() }
+                self?.queue.async {
+                    self?.preferExternalMicrophone()
+                    self?.updateHeadset()
+                }
             })
         observers.append(
             center.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil) {

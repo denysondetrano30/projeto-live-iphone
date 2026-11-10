@@ -8,8 +8,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.9.0"
-    CURRENT_PROJECT_VERSION: "9"
+    MARKETING_VERSION: "0.10.0"
+    CURRENT_PROJECT_VERSION: "10"
 packages:
   # libsrt (licença MPL 2.0) empacotada para iPhone pelo projeto HaishinKit. O app comprime e
   # empacota o vídeo ele mesmo e usa só o SRT dela (veja App/SRTSender.swift).
@@ -38,7 +38,7 @@ targets:
         CFBundleDisplayName: Projeto Live
         NSCameraUsageDescription: O Projeto Live usa a câmera para mandar a imagem para o computador da transmissão e para ler o QR code de pareamento.
         NSLocalNetworkUsageDescription: O Projeto Live usa a rede local para mandar a imagem da câmera para o OBS no computador da transmissão.
-        NSMicrophoneUsageDescription: O Projeto Live usa o microfone só no intercom, enquanto você segura "Segure para falar", para conversar com o diretor. Esse som não vai para a transmissão.
+        NSMicrophoneUsageDescription: O Projeto Live manda o som do microfone junto com a imagem para o OBS (o técnico decide se ele entra na transmissão) e usa o microfone no intercom, enquanto você segura "Segure para falar". A conversa do intercom não vai para a transmissão.
         UILaunchScreen: {}
         UIRequiresFullScreen: true
         # Só deitado: a transmissão é 16:9 e o vertical é recortado no PC.

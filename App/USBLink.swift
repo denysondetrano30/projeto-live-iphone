@@ -58,6 +58,21 @@ final class USBLink: ObservableObject {
         encoder.encode(sampleBuffer)
     }
 
+    /// Quadro de som AAC (de `AACEncoder`), junto com a imagem.
+    func sendAudio(_ adts: Data, pts: UInt64) {
+        guard isSending() else { return }
+        let packets = muxer.muxAudio(adts: adts, pts: pts)
+        queue.async { [weak self] in
+            guard let self, let connection = self.connection, self.pendingBytes <= 4_000_000 else { return }
+            self.pendingBytes += packets.count
+            connection.send(content: packets, completion: .contentProcessed { [weak self] _ in
+                self?.queue.async {
+                    self?.pendingBytes -= packets.count
+                }
+            })
+        }
+    }
+
     // MARK: - Conexão
 
     private func startListener() {
@@ -497,14 +512,32 @@ final class TSMuxer {
     private static let patPID: UInt16 = 0x0000
     private static let pmtPID: UInt16 = 0x1000
     private static let videoPID: UInt16 = 0x0100
+    private static let audioPID: UInt16 = 0x0101
 
     private var continuity: [UInt16: UInt8] = [:]
+    /// Vídeo e som chegam de threads diferentes.
+    private let lock = NSLock()
 
     func reset() {
+        lock.lock()
         continuity = [:]
+        lock.unlock()
+    }
+
+    /// Um quadro de som AAC (com cabeçalho ADTS), com o PTS no relógio do iPhone.
+    func muxAudio(adts: Data, pts: UInt64) -> Data {
+        lock.lock()
+        defer { lock.unlock() }
+        let length = 3 + 5 + adts.count
+        var pes = Data([0x00, 0x00, 0x01, 0xC0, UInt8((length >> 8) & 0xFF), UInt8(length & 0xFF), 0x80, 0x80, 0x05])
+        pes.append(contentsOf: Self.timestamp(pts))
+        pes.append(adts)
+        return packetize(pid: Self.audioPID, payload: pes, pcr: nil, randomAccess: false)
     }
 
     func mux(accessUnit: Data, pts: UInt64, isKeyFrame: Bool) -> Data {
+        lock.lock()
+        defer { lock.unlock() }
         var out = Data()
         if isKeyFrame {
             out.append(psiPacket(pid: Self.patPID, section: Self.patSection()))
@@ -540,7 +573,7 @@ final class TSMuxer {
         return Data(packet)
     }
 
-    private func packetize(pid: UInt16, payload: Data, pcr: UInt64, randomAccess: Bool) -> Data {
+    private func packetize(pid: UInt16, payload: Data, pcr: UInt64?, randomAccess: Bool) -> Data {
         var out = Data()
         let bytes = [UInt8](payload)
         var offset = 0
@@ -549,7 +582,7 @@ final class TSMuxer {
         while offset < bytes.count {
             var adaptation: [UInt8] = []
             var hasAdaptation = false
-            if first {
+            if first, let pcr {
                 hasAdaptation = true
                 adaptation.append(0x10 | (randomAccess ? 0x40 : 0x00)) // PCR (+ acesso aleatório)
                 adaptation.append(contentsOf: Self.pcrBytes(pcr))
@@ -622,10 +655,11 @@ final class TSMuxer {
 
     private static func pmtSection() -> [UInt8] {
         var section: [UInt8] = [
-            0x02, 0xB0, 0x12, 0x00, 0x01, 0xC1, 0x00, 0x00,
+            0x02, 0xB0, 0x17, 0x00, 0x01, 0xC1, 0x00, 0x00,
             0xE1, 0x00, // PCR no PID do vídeo (0x100)
             0xF0, 0x00, // sem descritores do programa
-            0x1B, 0xE1, 0x00, 0xF0, 0x00 // H.264 no PID 0x100
+            0x1B, 0xE1, 0x00, 0xF0, 0x00, // H.264 no PID 0x100
+            0x0F, 0xE1, 0x01, 0xF0, 0x00 // som AAC (ADTS) no PID 0x101
         ]
         section.append(contentsOf: crc32(section))
         return section

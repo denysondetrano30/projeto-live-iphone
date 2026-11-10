@@ -25,7 +25,7 @@ final class PCLink: ObservableObject {
     }
 
     static let port = 9000
-    static let appVersion = "0.9"
+    static let appVersion = "0.10"
 
     @Published private(set) var state: State = .starting
     @Published private(set) var pairing: Pairing?
@@ -95,6 +95,12 @@ final class PCLink: ObservableObject {
     func send(_ sampleBuffer: CMSampleBuffer) {
         guard locked({ sending }) else { return }
         encoder.encode(sampleBuffer)
+    }
+
+    /// Quadro de som AAC (de `AACEncoder`), junto com a imagem.
+    func sendAudio(_ adts: Data, pts: UInt64) {
+        guard locked({ sending }) else { return }
+        sender.send(muxer.muxAudio(adts: adts, pts: pts))
     }
 
     // MARK: - Ciclo de conexão
