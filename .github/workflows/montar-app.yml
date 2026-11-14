@@ -5,7 +5,7 @@ on:
     branches: [main]
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 env:
   HOMEBREW_NO_AUTO_UPDATE: "1"
 jobs:
@@ -50,3 +50,17 @@ jobs:
           name: ProjetoLive-ipa-${{ github.run_number }}
           path: ProjetoLive.ipa
           retention-days: 30
+
+      # Publica também em Releases > "teste", que baixa sem login, sempre no mesmo link:
+      # https://github.com/denysondetrano30/projeto-live-iphone/releases/download/teste/ProjetoLive.ipa
+      - name: Publica em Releases > teste (baixa sem login)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes="App de camera do iPhone de teste (compilacao ${{ github.run_number }}). Instale com o Sideloadly (Windows ou Mac)."
+          if ! gh release view teste >/dev/null 2>&1; then
+            gh release create teste --prerelease --target main --title "Versao de teste" --notes "$notes"
+          else
+            gh release edit teste --notes "$notes"
+          fi
+          gh release upload teste ProjetoLive.ipa --clobber
